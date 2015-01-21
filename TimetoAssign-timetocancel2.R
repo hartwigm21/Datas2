@@ -66,7 +66,7 @@ abline(v=quantile(as.numeric(Cancels$offer_count),c(.75,.85,.95)),col="blue")
 
 par(mfcol=c(1,1))
 #Time to User Cancel
-hist(as.numeric(Cancels$rider_c),main="Time to User Cancel City - Start of December",xlab="Time to Cancel",xlim = c(0,600),breaks=100,na.rm=TRUE)
+hist(as.numeric(Cancels$rider_c),main="Time to User Cancel City",xlab="Time to Cancel",xlim = c(0,600),breaks=100,na.rm=TRUE)
 abline(v=median(as.numeric(Cancels$rider_c),na.rm=TRUE),col="red",)
 abline(v=quantile(Cancels$rider_c,c(.75,.85,.9,.95),na.rm=TRUE),col="blue")
 
@@ -75,3 +75,44 @@ plot(as.numeric(Cancels$rider_c) ~ Cancels$offer_count, xlim=c(0,10),ylim=c(0,20
 abline(lm(Cancels$rider_c~Cancels$offer_count), col="red")
 
 dbDisconnect(MySQLcon1)
+MySQLcon1 <- dbConnect(MySQL.,user="can't show")
+
+PlusAssign <- dbGetQuery(MySQLcon1, "select
+                         time_to_sec(case
+                         when timediff(rides.pickup_time,rides.created_at) < '00:04:00' then
+                         timediff(
+                         max(
+                         case 
+                         when ride_events.name = 'assigned' then event_at 
+                         else null 
+                         END
+                         ), 
+                         case 
+                         when timediff(rides.pickup_time, rides.created_at) < '00:04:00' then rides.created_at
+                         else rides.pickup_time
+                         end    
+                         )
+                         else null
+                         END) timediff, 
+                         rides.id,
+                         providers.name,
+                         rides.pickup_time_local    													
+                         
+                         from ride_events
+                         join rides on ride_events.ride_id = rides.id
+                         join providers on rides.provider_id = providers.id
+                         join ride_offer_strategies ros on ros.ride_id = rides.id
+                         where rides.pickup_time > curdate() - interval 3 day and providers.virtual = 0
+                         group by rides.id
+                         having timediff is not null")
+
+
+fleetAssigns <- subset(PlusAssign, name == "fleet name")
+
+# Time to Assign
+hist(fleetAssigns$timediff, xlim = c(0,350),breaks = 1500,main="Fleet Cab Time to Assign",xlab="Time in Seconds")
+abline(v=median(fleetAssigns$timediff),col="red")
+abline(v=quantile(fleetAssigns$timediff,c(.75)),col="blue",)
+abline(v=quantile(fleetAssigns$time,c(.95)),col="orange",)
+
+plot(density(fleetAssigns$timediff),xlim=c(0,600),main="Fleet Cab Time to Assign")
